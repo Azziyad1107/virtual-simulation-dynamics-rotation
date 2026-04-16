@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Simulasi Dinamika Rotasi - Bidang Miring (Perbaikan Final)</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        #judul {
+            position: absolute;
+            top: 15px;
+            width: 100%;
+            text-align: center;
+            font-size: 24px;
+            font-weight: bold;
+            color: #fff;
+            text-shadow: 1px 1px 3px rgba(0,0,0,0.5);
+            pointer-events: none;
+            z-index: 10;
+        }
+        #ui {
+            position: absolute;
+            top: 70px;
+            left: 15px;
+            background: rgba(20,20,30,0.85);
+            backdrop-filter: blur(8px);
+            border-radius: 12px;
+            padding: 15px 20px;
+            border: 1px solid rgba(255,255,255,0.2);
+            font-family: monospace;
+            font-size: 14px;
+            color: #f0f0f0;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            width: 260px;
+            z-index: 20;
+            pointer-events: auto;
+        }
+        #ui label {
+            display: block;
+            margin-top: 8px;
+            font-weight: bold;
+            letter-spacing: 0.5px;
+        }
+        #ui input, #ui select {
+            width: 100%;
+            margin-top: 4px;
+            background: #444;
+            border: 1px solid #666;
+            color: white;
+            border-radius: 6px;
+            padding: 5px;
+        }
+        #ui button {
+            background: #2c7da0;
+            border: none;
+            color: white;
+            padding: 6px 12px;
+            margin-top: 12px;
+            margin-right: 8px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background 0.2s;
+            font-weight: bold;
+        }
+        #ui button:hover {
+            background: #1f5e7a;
+        }
+        #info {
+            background: #000000aa;
+            padding: 8px;
+            border-radius: 8px;
+            margin-top: 12px;
+            font-size: 12px;
+            text-align: center;
+            border-left: 3px solid #ffaa44;
+        }
+        .status {
+            font-size: 12px;
+            margin-top: 5px;
+            text-align: center;
+            color: #ddd;
+        }
+        hr {
+            margin: 12px 0;
+            border-color: #555;
+        }
+        @media (max-width: 600px) {
+            #ui { width: 220px; font-size: 12px; padding: 10px; top: 60px; }
+            #judul { font-size: 18px; top: 5px; }
+        }
+    </style>
+</head>
+<body>
+    <div id="judul">
+        🌀 Simulasi Dinamika Rotasi pada Bidang Miring
+    </div>
+    <div id="ui">
+        <label>⚖️ Massa (kg): <span id="massaLabel">1.0</span></label>
+        <input type="range" id="massa" min="0.5" max="5" step="0.1" value="1">
+        
+        <label>📏 Jari-jari (m): <span id="radiusLabel">0.5</span></label>
+        <input type="range" id="radius" min="0.1" max="1" step="0.1" value="0.5">
+        
+        <label>📐 Sudut (°): <span id="sudutLabel">20</span></label>
+        <input type="range" id="sudut" min="5" max="45" value="20">
+        
+        <label>🧩 Benda:</label>
+        <select id="benda">
+            <option value="bola">⚽ Bola Pejal</option>
+            <option value="silinder">🧴 Silinder Pejal</option>
+            <option value="cincin">💍 Cincin Tipis</option>
+        </select>
+        
+        <div style="display: flex; gap: 8px; margin-top: 12px;">
+            <button id="startBtn">▶ Start</button>
+            <button id="resetBtn">🔄 Reset</button>
+        </div>
+        
+        <div id="info">
+            📌 Momen Inersia: <span id="inersiaVal">0.000</span> kg·m²<br>
+            🏎️ Kecepatan: <span id="kecepatanVal">0.00</span> m/s<br>
+            📍 Posisi: <span id="posisiVal">0.00</span> m
+        </div>
+        <div class="status">✨ Geser kanan mouse untuk memutar kamera</div>
+    </div>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.128.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.128.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        // --- Setup Scene, Camera, Renderer ---
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x111122);
+        scene.fog = new THREE.FogExp2(0x111122, 0.008);
+
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(6, 4, 8);
+        camera.lookAt(0, 0.8, 0);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        document.body.appendChild(renderer.domElement);
+
+        // --- Controls ---
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.autoRotate = false;
+        controls.enableZoom = true;
+        controls.target.set(0, 0.8, 0);
+        
+        // --- Pencahayaan ---
+        const ambientLight = new THREE.AmbientLight(0x404060);
+        scene.add(ambientLight);
+        
+        const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
+        dirLight.position.set(3, 8, 2);
+        dirLight.castShadow = true;
+        dirLight.receiveShadow = true;
+        dirLight.shadow.mapSize.width = 1024;
+        dirLight.shadow.mapSize.height = 1024;
+        dirLight.shadow.camera.near = 0.5;
+        dirLight.shadow.camera.far = 12;
+        dirLight.shadow.camera.left = -5;
+        dirLight.shadow.camera.right = 5;
+        dirLight.shadow.camera.top = 5;
+        dirLight.shadow.camera.bottom = -5;
+        scene.add(dirLight);
+        
+        const fillLight = new THREE.PointLight(0x4466cc, 0.4);
+        fillLight.position.set(0, -1, 1);
+        scene.add(fillLight);
+        
+        const rimLight = new THREE.PointLight(0xffaa66, 0.5);
+        rimLight.position.set(-2, 2, -3);
+        scene.add(rimLight);
+        
+        // --- Helper Grid (ditempatkan di bawah bidang miring sebagai lantai referensi) ---
+        const gridHelper = new THREE.GridHelper(12, 20, 0x88aaff, 0x335588);
+        gridHelper.position.y = -0.35;
+        scene.add(gridHelper);
+        
+        // Tambahkan garis sumbu sederhana untuk referensi
+        const axesHelper = new THREE.AxesHelper(3);
+        axesHelper.position.y = -0.35;
+        // scene.add(axesHelper); // (optional, bisa diaktifkan jika perlu)
+        
+        // --- Bidang Miring ---
+        const bidangLebar = 6.0;
+        const bidangPanjang = 2.8;
+        const bidangTebal = 0.15;
+        const bidangMaterial = new THREE.MeshStandardMaterial({ color: 0xbc9a6c, roughness: 0.7, metalness: 0.1 });
+        const bidangMesh = new THREE.Mesh(new THREE.BoxGeometry(bidangLebar, bidangTebal, bidangPanjang), bidangMaterial);
+        bidangMesh.castShadow = true;
+        bidangMesh.receiveShadow = true;
+        scene.add(bidangMesh);
+        
+        // Garis tepi bidang (agar lebih jelas)
+        const edgesGeo = new THREE.EdgesGeometry(bidangMesh.geometry);
+        const edgesMat = new THREE.LineBasicMaterial({ color: 0x554433 });
+        const wireframe = new THREE.LineSegments(edgesGeo, edgesMat);
+        bidangMesh.add(wireframe);
+        
+        // Tambahkan papan penanda ujung bidang (opsional)
+        const ujungMaterial = new THREE.MeshStandardMaterial({ color: 0xaa8866 });
+        const ujungTanda = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.2, bidangPanjang + 0.2), ujungMaterial);
+        ujungTanda.position.set(bidangLebar/2 - 0.1, 0.05, 0);
+        ujungTanda.castShadow = true;
+        bidangMesh.add(ujungTanda);
+        
+        // --- Objek dinamis ---
+        let objek = null;
+        
+        // --- Variabel fisika ---
+        let v = 0;                // kecepatan linear (m/s)
+        let s = 0;               // jarak tempuh sepanjang bidang (m)
+        let animasi = false;
+        
+        // Vektor arah (dalam koordinat dunia)
+        let worldTangent = new THREE.Vector3(1, 0, 0);
+        let worldNormal = new THREE.Vector3(0, 1, 0);
+        let worldRotAxis = new THREE.Vector3(0, 0, 1); // sumbu rotasi (tegak lurus gerak & bidang)
+        
+        // Konstanta
+        const g = 9.8;
+        const startX_local = -2.2;    // posisi awal di koordinat lokal bidang (x dari -2.2)
+        const batasAkhirX_local = 2.8; // batas akhir bidang di x lokal (ujung bidang)
+        const maxJarak = batasAkhirX_local - startX_local; // total jarak tempuh maksimal
+        
+        // --- Fungsi momen inersia ---
+        function hitungMomenInersia(m, r) {
+            const tipe = document.getElementById('benda').value;
+            if (tipe === 'bola') return (2/5) * m * r * r;
+            if (tipe === 'silinder') return 0.5 * m * r * r;
+            return m * r * r; // cincin
+        }
+        
+        // Percepatan linear (tanpa slip)
+        function hitungPercepatan(m, r, thetaRad) {
+            const I = hitungMomenInersia(m, r);
+            return (g * Math.sin(thetaRad)) / (1 + (I / (m * r * r)));
+        }
+        
+        // Perbarui vektor arah berdasarkan sudut kemiringan bidang (theta)
+        function updateVektorArah(thetaRad) {
+            // Tangent searah sumbu X bidang setelah rotasi
+            worldTangent.set(Math.cos(thetaRad), -Math.sin(thetaRad), 0).normalize();
+            // Normal ke atas bidang
+            worldNormal.set(Math.sin(thetaRad), Math.cos(thetaRad), 0).normalize();
+            // Sumbu rotasi: tegak lurus terhadap tangent dan normal -> cross product
+            worldRotAxis.crossVectors(worldTangent, worldNormal).normalize();
+        }
+        
+        // --- Menentukan orientasi awal objek berdasarkan jenis dan sumbu rotasi ---
+        function getBaseOrientationQuaternion() {
+            const tipe = document.getElementById('benda').value;
+            const q = new THREE.Quaternion();
+            
+            if (tipe === 'bola') {
+                return q.identity();
+            } 
+            else if (tipe === 'silinder') {
+                // Silinder: sumbu panjang (default Y) harus sejajar dengan worldRotAxis
+                const defaultAxis = new THREE.Vector3(0, 1, 0);
+                q.setFromUnitVectors(defaultAxis, worldRotAxis);
+            } 
+            else if (tipe === 'cincin') {
+                // Cincin: sumbu lubang (default Z) harus sejajar dengan worldRotAxis
+                const defaultAxis = new THREE.Vector3(0, 0, 1);
+                q.setFromUnitVectors(defaultAxis, worldRotAxis);
+            }
+            return q;
+        }
+        
+        // --- Membuat ulang objek 3D ---
+        function buatObjek() {
+            if (objek) scene.remove(objek);
+            
+            const r = parseFloat(document.getElementById('radius').value);
+            const tipe = document.getElementById('benda').value;
+            let geometry;
+            
+            if (tipe === 'bola') {
+                geometry = new THREE.SphereGeometry(r, 64, 64);
+            } else if (tipe === 'silinder') {
+                geometry = new THREE.CylinderGeometry(r, r, r * 2, 48);
+            } else { // cincin
+                geometry = new THREE.TorusGeometry(r, r * 0.12, 48, 128);
+            }
+            
+            const material = new THREE.MeshStandardMaterial({
+                color: 0x44aaff,
+                metalness: 0.7,
+                roughness: 0.3,
+                emissive: 0x001133,
+                emissiveIntensity: 0.2
+            });
+            objek = new THREE.Mesh(geometry, material);
+            objek.castShadow = true;
+            objek.receiveShadow = true;
+            scene.add(objek);
+            
+            resetSimulasi();
+            updateUI();
+        }
+        
+        // --- Update UI ---
+        function updateUI() {
+            const m = parseFloat(document.getElementById('massa').value);
+            const r = parseFloat(document.getElementById('radius').value);
+            const sudut = parseFloat(document.getElementById('sudut').value);
+            
+            document.getElementById('massaLabel').innerText = m.toFixed(2);
+            document.getElementById('radiusLabel').innerText = r.toFixed(2);
+            document.getElementById('sudutLabel').innerText = sudut;
+            
+            const I = hitungMomenInersia(m, r);
+            document.getElementById('inersiaVal').innerText = I.toFixed(4);
+            document.getElementById('kecepatanVal').innerText = v.toFixed(2);
+            document.getElementById('posisiVal').innerText = s.toFixed(2);
+        }
+        
+        // --- Reset simulasi (kembali ke awal) ---
+        function resetSimulasi() {
+            animasi = false;
+            v = 0;
+            s = 0;
+            
+            if (!objek) return;
+            
+            const thetaDeg = parseFloat(document.getElementById('sudut').value);
+            const thetaRad = thetaDeg * Math.PI / 180;
+            updateVektorArah(thetaRad);
+            
+            // Atur orientasi dasar objek
+            const baseQuat = getBaseOrientationQuaternion();
+            objek.quaternion.copy(baseQuat);
+            
+            // Hitung posisi awal di dunia (dengan normal bidang dan jari-jari)
+            const startLocal = new THREE.Vector3(startX_local, 0, 0);
+            const startWorld = startLocal.clone().applyAxisAngle(new THREE.Vector3(0, 0, 1), -thetaRad);
+            const radiusVal = parseFloat(document.getElementById('radius').value);
+            const posisiAwal = startWorld.clone().addScaledVector(worldNormal, radiusVal);
+            objek.position.copy(posisiAwal);
+            
+            updateUI();
+        }
+        
+        // --- Fungsi untuk menghentikan animasi saat parameter berubah ---
+        function parameterChanged() {
+            if (animasi) animasi = false;
+            resetSimulasi();
+        }
+        
+        // --- Event listeners ---
+        document.getElementById('massa').addEventListener('input', () => parameterChanged());
+        document.getElementById('radius').addEventListener('input', () => buatObjek());
+        document.getElementById('sudut').addEventListener('input', () => {
+            const thetaDeg = parseFloat(document.getElementById('sudut').value);
+            bidangMesh.rotation.z = -thetaDeg * Math.PI / 180;
+            parameterChanged();
+        });
+        document.getElementById('benda').addEventListener('change', () => buatObjek());
+        
+        document.getElementById('startBtn').addEventListener('click', () => {
+            if (!animasi && s < maxJarak - 0.05) {
+                animasi = true;
+            }
+        });
+        document.getElementById('resetBtn').addEventListener('click', () => resetSimulasi());
+        
+        // --- Animasi utama ---
+        let previousTime = performance.now() / 1000;
+        
+        function animate() {
+            const now = performance.now() / 1000;
+            let dt = Math.min(0.033, now - previousTime);
+            if (dt < 0) dt = 0.016;
+            previousTime = now;
+            
+            const m = parseFloat(document.getElementById('massa').value);
+            const r = parseFloat(document.getElementById('radius').value);
+            const thetaDeg = parseFloat(document.getElementById('sudut').value);
+            const thetaRad = thetaDeg * Math.PI / 180;
+            
+            // Rotasi bidang
+            bidangMesh.rotation.z = -thetaRad;
+            
+            // Perbarui vektor arah
+            updateVektorArah(thetaRad);
+            
+            if (animasi && objek) {
+                const a = hitungPercepatan(m, r, thetaRad);
+                v += a * dt;
+                s += v * dt;
+                
+                // Cek apakah mencapai ujung bidang
+                if (s >= maxJarak) {
+                    s = maxJarak;
+                    v = 0;
+                    animasi = false;
+                    // Reset otomatis ke posisi awal setelah jeda singkat (agar terlihat kembali)
+                    setTimeout(() => {
+                        if (!animasi) resetSimulasi();
+                    }, 100);
+                }
+                
+                // Batas bawah posisi (tidak boleh negatif)
+                if (s < 0) s = 0;
+                
+                // Sudut rotasi yang ditambahkan: Δθ = v * dt / r
+                const deltaRot = (v * dt) / r;
+                const rotQuat = new THREE.Quaternion().setFromAxisAngle(worldRotAxis, -deltaRot);
+                objek.quaternion.premultiply(rotQuat);
+                
+                // Hitung posisi objek di dunia
+                const startLocal = new THREE.Vector3(startX_local, 0, 0);
+                const startWorld = startLocal.clone().applyAxisAngle(new THREE.Vector3(0, 0, 1), -thetaRad);
+                const posisiAlong = startWorld.clone().addScaledVector(worldTangent, s);
+                const posisiFinal = posisiAlong.clone().addScaledVector(worldNormal, r);
+                objek.position.copy(posisiFinal);
+                
+                // Update UI
+                document.getElementById('kecepatanVal').innerText = v.toFixed(2);
+                document.getElementById('posisiVal').innerText = s.toFixed(2);
+            }
+            
+            controls.update();
+            renderer.render(scene, camera);
+            requestAnimationFrame(animate);
+        }
+        
+        // --- Inisialisasi ---
+        function init() {
+            buatObjek();
+            const initTheta = parseFloat(document.getElementById('sudut').value) * Math.PI / 180;
+            bidangMesh.rotation.z = -initTheta;
+            updateVektorArah(initTheta);
+            resetSimulasi();
+            previousTime = performance.now() / 1000;
+            animate();
+        }
+        
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+        
+        init();
+    </script>
+</body>
+</html>
